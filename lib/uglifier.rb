@@ -16,6 +16,7 @@ class Uglifier
     :squeeze => true, # Squeeze code resulting in smaller, but less-readable code
     :seqs => true, # Reduce consecutive statements in blocks into single statement
     :dead_code => true, # Remove dead code (e.g. after return)
+    :no_console => false, # Remove console method calls.
     :lift_vars => false, # Lift all var declarations at the start of the scope
     :unsafe => false, # Optimizations known to be unsafe in some situations
     :copyright => true, # Show copyright message
@@ -78,6 +79,30 @@ class Uglifier
       JS
     end
 
+    if @options[:no_console]
+      js << <<-JS
+      var ast_squeeze_console = function(ast) {
+              var w = UglifyJS.uglify.ast_walker(), walk = w.walk, scope;
+               return w.with_walkers({
+                      "stat": function(stmt) {
+                              if(stmt[0] === "call" && stmt[1][0] == "dot" && stmt[1][1] instanceof Array && stmt[1][1][0] == 'name' && stmt[1][1][1] == "console") {
+                                      return ["block"];
+                              }
+                              return ["stat", walk(stmt)];
+                      },
+                      "call": function(expr, args) {
+                              if (expr[0] == "dot" && expr[1] instanceof Array && expr[1][0] == 'name' && expr[1][1] == "console") {
+                                      return ["atom", "0"];
+                              }
+                      }
+              }, function() {
+                      return walk(ast);
+              });
+      };
+      ast = ast_squeeze_console(ast);
+      JS
+    end
+    
     if @options[:mangle]
       js << "ast = UglifyJS.uglify.ast_mangle(ast, #{MultiJson.encode(mangle_options)});"
     end
